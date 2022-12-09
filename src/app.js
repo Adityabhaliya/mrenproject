@@ -3,10 +3,12 @@ const express = require("express");
 const app = express();
 const path = require('path');
 const hbs = require('hbs');
+const cookieParser = require("cookie-parser");
+const auth = require('./middleware/auth')
 
 require("./db/conn")
 const Register = require("./models/registers");
-const { triggerAsyncId } = require("async_hooks");
+const { triggerAsyncId, AsyncResource } = require("async_hooks");
 const port = process.env.PORT || 3000;
 
 const static_path = path.join(__dirname, "../public")
@@ -15,6 +17,7 @@ const partials_path = path.join(__dirname, "../templates/partials")
 
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: false }));
 
 
@@ -28,11 +31,42 @@ hbs.registerPartials(partials_path);
 app.get("/", (req, res) => {
     res.render("index")
 })
+app.get("/secret", auth,(req, res) => {
+    // console.log(`this cookie is awsome ${req.cookies.jwt}`);
+
+    res.render("secret")
+})
 app.get("/register", (req, res) => {
     res.render("register")
 })
 app.get("/login", (req, res) => {
     res.render("login")
+})
+
+app.get("/logout", auth, async(req,res) => {
+
+    try {
+
+        //  for single logout
+        // req.user.tokens= req.user.tokens.filter((currElement)=>{
+        //         return  currElement.token != req.token
+        // })
+
+        // logout for all devices...
+
+        req.user.tokens=[];
+
+        res.clearCookie("jwt");
+        
+        console.log("logout successfully...!");
+
+       await req.user.save();
+       res.render("login");
+    } catch (error) {
+        res.status(500).send(error);
+      
+    }
+
 })
 
 
@@ -58,6 +92,12 @@ app.post("/register", async (req, res) => {
             console.log("the success part" + registerEmployee);
             const token =await registerEmployee.generateAuthToken();
             console.log("the token part" + token);
+
+            res.cookie("jwt", token,{
+                expires:new Date(Date.now()+60000),
+                httpOnly:true   
+            });
+            console.log(cookie);
 
 
             const registered = await registerEmployee.save();
@@ -86,11 +126,19 @@ app.post("/login", async (req, res) => {
         const token =await useremail.generateAuthToken();
             console.log("the token part" + token);
 
+            res.cookie("jwt", token,{
+                expires:new Date(Date.now()+30000),
+                httpOnly:true  ,
+                // secure:true 
+            });
+
+
         if (isMatch) { // if(useremail.password === password){
             res.status(201).render("index");
         } else {
             res.send("invalid password ");
         }  
+
 
         // console.log(`email is ${email} and password is ${password}`)
 
